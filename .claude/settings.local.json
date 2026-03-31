@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/tmp/kyc_venv/bin/python3:*)",
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "Bash(python3 -c \":*)",
+      "Bash(python3 -c \"import httpx, anthropic, openpyxl, fastapi, uvicorn, dotenv; print\\(''All deps OK''\\)\")",
+      "Bash(python3 -c \"import app; print\\(''app.py syntax OK''\\)\")",
+      "Bash(curl -s \"http://localhost:8000/api/jira/recent?max_results=5\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(pip3 install:*)",
+      "Bash(python3 -c \"import fastapi, uvicorn, openpyxl, httpx; print\\(''All imports OK''\\)\")",
+      "Bash(curl -s http://localhost:8000/)",
+      "Bash(curl -s http://localhost:8000/api/jira/KC-4299)",
+      "Bash(curl -s http://localhost:8000/openapi.json)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(k\\) for k in d[''''paths''''].keys\\(\\)]\")",
+      "Bash(curl -s http://localhost:8000/api/jira/issue/KC-4299)",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/api/sessions -H \"Content-Type: application/json\" -d '{\"\"\"\"ticket_id\"\"\"\":\"\"\"\"TEST-1\"\"\"\",\"\"\"\"flow\"\"\"\":\"\"\"\"TH Onboarding\"\"\"\"}')",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(''''session id:'''', d.get\\(''''id''''\\)\\); print\\(''''excel_source:'''', d.get\\(''''excel_source''''\\)\\)\")",
+      "Bash(curl -s http://localhost:8000/api/config)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(''''google_sheets_available:'''', d.get\\(''''google_sheets_available''''\\)\\); print\\(''''google_sheets_authenticated:'''', d.get\\(''''google_sheets_authenticated''''\\)\\); print\\(''''google_sheet_id:'''', d.get\\(''''google_sheet_id''''\\)\\)\")",
+      "Bash(open \"https://docs.google.com/spreadsheets/d/1C2yiPArIfee7fq92K1WJo0pMfM1D9YOYcixXF1cuolQ/edit#gid=0\")"
+    ]
+  }
+}

@@ -1,0 +1,1652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KYC QA Agent</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--surface:#161b22;--surface2:#1c2128;--border:#30363d;
+  --text:#e6edf3;--text-muted:#7d8590;--text-dim:#484f58;
+  --accent:#58a6ff;--accent-dim:#1f3f6e;
+  --green:#3fb950;--green-dim:#1a3a2a;
+  --yellow:#d29922;--yellow-dim:#3a2e00;
+  --red:#f85149;--red-dim:#3d1a1a;
+  --purple:#bc8cff;--purple-dim:#2a1a4a;
+  --orange:#ff8c42;--orange-dim:#3d1a00;
+  --font-mono:'SF Mono','Fira Code',monospace;
+  --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --radius:8px;--radius-sm:5px;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);font-size:13px}
+
+/* Layout */
+#app{display:flex;height:100vh;overflow:hidden}
+
+/* Zone 1: Sidebar */
+#sidebar{width:280px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+
+/* Zone 2: Main workspace */
+#workspace{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* Zone 3: Activity feed */
+#activity-zone{width:300px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Sidebar ── */
+#sidebar-header{padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
+#sidebar-title{font-size:14px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;margin-bottom:8px}
+#sidebar-title span{color:var(--accent)}
+.status-row{display:flex;align-items:center;gap:12px}
+.status-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text-muted)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--text-dim);flex-shrink:0}
+.dot.ok{background:var(--green);box-shadow:0 0 5px var(--green)}
+.dot.error{background:var(--red)}
+.dot.warn{background:var(--yellow)}
+
+#sessions-header{padding:10px 14px 6px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.section-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)}
+#btn-new-session{background:var(--accent);color:#fff;border:none;padding:4px 10px;border-radius:var(--radius-sm);font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:4px}
+#btn-new-session:hover{opacity:.85}
+
+#session-list{flex:1;overflow-y:auto;padding:6px 8px}
+.session-card{padding:8px 10px;border-radius:var(--radius-sm);border:1px solid transparent;cursor:pointer;margin-bottom:4px;position:relative;transition:all .15s}
+.session-card:hover{background:var(--surface2);border-color:var(--border)}
+.session-card.active{background:var(--accent-dim);border-color:var(--accent)}
+.sc-ticket{font-size:12px;font-weight:600;color:var(--accent);display:flex;align-items:center;justify-content:space-between}
+.sc-summary{font-size:11px;color:var(--text-muted);margin-top:2px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sc-meta{font-size:10px;color:var(--text-dim);margin-top:4px;display:flex;gap:8px;align-items:center}
+.sc-step-badge{background:var(--surface2);border:1px solid var(--border);padding:1px 6px;border-radius:10px;font-size:9px}
+.session-card.active .sc-step-badge{background:var(--accent-dim)}
+.sc-delete{opacity:0;position:absolute;right:8px;top:8px;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px;padding:2px 4px;border-radius:3px;line-height:1}
+.session-card:hover .sc-delete{opacity:1}
+.sc-delete:hover{color:var(--red);background:var(--red-dim)}
+.sessions-empty{padding:20px 14px;text-align:center;color:var(--text-dim);font-size:11px;line-height:1.8}
+
+/* sidebar stats */
+#sidebar-stats{padding:10px 14px;border-top:1px solid var(--border);flex-shrink:0}
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:6px}
+.stat-box{background:var(--surface2);border-radius:var(--radius-sm);padding:6px;text-align:center}
+.stat-num{font-size:16px;font-weight:700;color:var(--accent)}
+.stat-lbl{font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em}
+
+/* ── Workspace header ── */
+#workspace-header{padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:12px;background:var(--surface)}
+#ws-ticket-label{font-size:13px;font-weight:700;color:var(--accent);white-space:nowrap}
+#ws-summary{font-size:12px;color:var(--text-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ws-meta-badge{font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid var(--border);color:var(--text-muted);white-space:nowrap}
+
+/* Step pipeline */
+#pipeline{display:flex;align-items:center;padding:8px 16px;background:var(--bg);border-bottom:1px solid var(--border);flex-shrink:0;gap:0}
+.pipe-step{display:flex;align-items:center;gap:5px;padding:4px 12px;border-radius:20px;cursor:pointer;transition:all .2s;white-space:nowrap}
+.pipe-step.active{background:var(--accent-dim)}
+.pipe-step.done{background:var(--green-dim);cursor:pointer}
+.pipe-step.locked{opacity:.35;cursor:not-allowed}
+.pipe-num{width:17px;height:17px;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;background:var(--border);color:var(--text-muted)}
+.pipe-step.active .pipe-num{background:var(--accent);color:#fff}
+.pipe-step.done .pipe-num{background:var(--green);color:#000}
+.pipe-label{font-size:11px;font-weight:600;color:var(--text-dim)}
+.pipe-step.active .pipe-label{color:var(--accent)}
+.pipe-step.done .pipe-label{color:var(--green)}
+.pipe-connector{flex:1;height:1px;background:var(--border);max-width:40px}
+.pipe-connector.done{background:var(--green)}
+
+/* ── Step content ── */
+#step-content{flex:1;overflow-y:auto;padding:20px}
+
+/* Empty state */
+#empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-dim);text-align:center;gap:12px}
+#empty-state .big-icon{font-size:48px}
+#empty-state h2{font-size:18px;color:var(--text-muted);font-weight:500}
+#empty-state p{font-size:12px;line-height:1.7;max-width:320px}
+
+/* Card */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+.card-title{font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+
+/* Step 1: Requirement */
+.jira-input-row{display:flex;gap:8px;margin-bottom:10px}
+.jira-input-row input{flex:1}
+.ticket-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px}
+.tc-key{font-size:14px;font-weight:700;color:var(--accent);margin-bottom:4px}
+.tc-key a{color:inherit;text-decoration:none;font-size:11px;font-weight:400;margin-left:6px;opacity:.7}
+.tc-key a:hover{opacity:1}
+.tc-summary-text{font-size:13px;color:var(--text);margin-bottom:8px;line-height:1.4}
+.tc-meta-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.meta-badge{font-size:10px;padding:2px 8px;border-radius:10px;background:var(--surface2);color:var(--text-muted);border:1px solid var(--border)}
+.meta-badge.high{background:var(--orange-dim);color:var(--orange);border-color:var(--orange-dim)}
+.meta-badge.medium{background:var(--yellow-dim);color:var(--yellow);border-color:var(--yellow-dim)}
+.meta-badge.bug{background:var(--red-dim);color:var(--red);border-color:var(--red-dim)}
+.meta-badge.story{background:var(--accent-dim);color:var(--accent);border-color:var(--accent-dim)}
+.tc-desc{font-size:11px;color:var(--text-muted);line-height:1.6;max-height:80px;overflow:hidden;border-top:1px solid var(--border);padding-top:8px;white-space:pre-wrap}
+.tc-desc.expanded{max-height:none}
+
+#btn-copy-prompt{width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:700;cursor:pointer;transition:opacity .15s;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px}
+#btn-copy-prompt:hover{opacity:.85}
+#btn-copy-prompt.copied{background:var(--green)}
+
+/* Segmented control (source/mode toggle) */
+.seg-control{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+.seg-btn{background:var(--surface2);border:none;border-right:1px solid var(--border);padding:6px 14px;font-size:11px;font-weight:500;color:var(--text-muted);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.seg-btn:last-child{border-right:none}
+.seg-btn.active{background:var(--accent);color:#fff}
+.seg-btn.active-green{background:var(--green);color:#000}
+.seg-btn:hover:not(.active):not(.active-green):not(:disabled){background:var(--border);color:var(--text)}
+.seg-btn:disabled{opacity:0.35;cursor:not-allowed}
+
+/* Destination section rows in Step 1 */
+.dest-row{display:flex;flex-direction:column;gap:4px;margin-bottom:14px}
+.dest-row-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim)}
+.dest-hint{font-size:10px;color:var(--text-dim);margin-top:3px;line-height:1.4}
+
+/* Destination badge in Step 2 */
+.dest-badge{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:12px;font-size:11px}
+.dest-badge-icon{font-size:14px;flex-shrink:0}
+.dest-badge-info{flex:1}
+.dest-badge-source{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim)}
+.dest-badge-sheet{font-size:12px;font-weight:600;color:var(--text);margin-top:1px}
+.dest-badge-none{color:var(--red);font-style:italic}
+.dest-change-btn{font-size:10px;color:var(--accent);background:none;border:1px solid var(--accent-dim);border-radius:3px;padding:2px 8px;cursor:pointer;white-space:nowrap}
+.dest-change-btn:hover{background:var(--accent-dim)}
+
+/* Step 2: TC Import */
+.import-instructions{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px;font-size:12px;color:var(--text-muted);line-height:1.7}
+.import-instructions b{color:var(--accent)}
+#tc-json-input{width:100%;height:140px;resize:vertical;font-family:var(--font-mono);font-size:11px;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);outline:none;transition:border-color .15s}
+#tc-json-input:focus{border-color:var(--accent)}
+#tc-json-input.valid{border-color:var(--green)}
+#tc-json-input.invalid{border-color:var(--red)}
+.json-status{font-size:11px;margin-top:4px;min-height:16px}
+.json-status.ok{color:var(--green)}
+.json-status.err{color:var(--red)}
+
+.sheet-row{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+.sheet-row label{font-size:11px;color:var(--text-muted);white-space:nowrap}
+.sheet-row select{flex:1}
+
+/* TC list in step 2 */
+.tc-list{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.tc-item{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+.tc-item-header{padding:8px 12px;display:flex;align-items:center;gap:8px;cursor:pointer}
+.tc-item-header:hover{background:var(--bg)}
+.tc-num{font-size:10px;color:var(--text-dim);width:28px;flex-shrink:0}
+.tc-title-text{flex:1;font-size:12px;font-weight:500;color:var(--text);line-height:1.4}
+.tc-badges{display:flex;gap:4px;flex-shrink:0}
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:500;white-space:nowrap}
+.badge.positive{background:var(--green-dim);color:var(--green)}
+.badge.negative{background:var(--red-dim);color:var(--red)}
+.badge.high{background:var(--orange-dim);color:var(--orange)}
+.badge.medium{background:var(--yellow-dim);color:var(--yellow)}
+.badge.low{background:var(--surface2);color:var(--text-muted)}
+.badge.th{background:var(--accent-dim);color:var(--accent)}
+.badge.gl{background:var(--green-dim);color:var(--green)}
+.badge.glth{background:var(--purple-dim);color:var(--purple)}
+.badge.pass{background:var(--green-dim);color:var(--green)}
+.badge.fail{background:var(--red-dim);color:var(--red)}
+.badge.skip{background:var(--yellow-dim);color:var(--yellow)}
+.tc-actions{display:flex;gap:4px;flex-shrink:0}
+.tc-action-btn{background:none;border:none;color:var(--text-dim);cursor:pointer;padding:3px 5px;border-radius:3px;font-size:12px;line-height:1}
+.tc-action-btn:hover{background:var(--surface);color:var(--text)}
+.tc-action-btn.danger:hover{color:var(--red);background:var(--red-dim)}
+.tc-body{padding:10px 12px;border-top:1px solid var(--border);display:none}
+.tc-item.expanded .tc-body{display:block}
+.tc-item.expanded .tc-item-header{background:var(--accent-dim)}
+.tc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tc-field-label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-dim);margin-bottom:3px}
+.tc-field-value{font-size:11px;color:var(--text-muted);line-height:1.5;white-space:pre-wrap}
+.tc-field.full{grid-column:1/-1}
+
+/* Edit form */
+.edit-form{padding:10px 12px;border-top:1px solid var(--border);display:none}
+.tc-item.editing .edit-form{display:block}
+.tc-item.editing .tc-body{display:none}
+.tc-item.editing .tc-item-header{background:var(--yellow-dim)}
+.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.edit-field{display:flex;flex-direction:column;gap:3px}
+.edit-field.full{grid-column:1/-1}
+.edit-field label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-dim)}
+.edit-field input,.edit-field select,.edit-field textarea{width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font-sans);font-size:11px;outline:none}
+.edit-field input:focus,.edit-field select:focus,.edit-field textarea:focus{border-color:var(--accent)}
+.edit-field textarea{resize:vertical;min-height:60px;font-family:var(--font-mono)}
+.edit-actions{display:flex;gap:6px;margin-top:8px}
+
+/* Step 3: Test Run */
+.env-row{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.env-url-display{font-size:10px;color:var(--text-dim);font-family:var(--font-mono);margin-bottom:12px;padding:5px 8px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border);word-break:break-all}
+.radio-group{display:flex;gap:2px}
+.radio-opt{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);cursor:pointer;font-size:11px;color:var(--text-muted);transition:all .15s}
+.radio-opt:hover{border-color:var(--accent);color:var(--text)}
+.radio-opt input{accent-color:var(--accent)}
+.radio-opt.selected{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.test-coming-soon{text-align:center;padding:24px;background:var(--surface2);border-radius:var(--radius-sm);border:1px dashed var(--border);margin-bottom:12px}
+.test-coming-soon .icon{font-size:32px;margin-bottom:8px}
+.test-coming-soon h3{font-size:13px;color:var(--text-muted);margin-bottom:4px}
+.test-coming-soon p{font-size:11px;color:var(--text-dim);line-height:1.6}
+.tc-test-item{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.tc-test-info{flex:1;min-width:0}
+.tc-test-title{font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tc-test-meta{font-size:10px;color:var(--text-dim);margin-top:2px}
+.tc-test-actions{display:flex;gap:4px;flex-shrink:0}
+.test-btn{padding:3px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);background:none;color:var(--text-muted);font-size:10px;font-weight:600;cursor:pointer;transition:all .15s}
+.test-btn.pass:hover,.test-btn.pass.active{background:var(--green-dim);border-color:var(--green);color:var(--green)}
+.test-btn.fail:hover,.test-btn.fail.active{background:var(--red-dim);border-color:var(--red);color:var(--red)}
+.test-btn.skip:hover,.test-btn.skip.active{background:var(--yellow-dim);border-color:var(--yellow);color:var(--yellow)}
+.test-summary-bar{display:flex;gap:12px;padding:10px 14px;background:var(--bg);border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:12px}
+.test-stat{font-size:12px;font-weight:600}
+.test-stat.pass-stat{color:var(--green)}
+.test-stat.fail-stat{color:var(--red)}
+.test-stat.skip-stat{color:var(--yellow)}
+.test-stat.total-stat{color:var(--text-muted)}
+
+/* Step 4: Bug Report */
+.bug-tc-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px}
+.bug-tc-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.bug-tc-title{flex:1;font-size:12px;color:var(--text);font-weight:500}
+.bug-fields{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:end}
+.bug-field input,.bug-field select{width:100%;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:11px;outline:none}
+.bug-field input:focus,.bug-field select:focus{border-color:var(--accent)}
+.bug-field label{font-size:10px;color:var(--text-dim);margin-bottom:3px;display:block}
+.bug-action-row{display:flex;gap:6px;margin-top:8px}
+.bug-created-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--green-dim);border:1px solid var(--green);border-radius:10px;font-size:10px;color:var(--green)}
+.bug-created-badge a{color:inherit}
+
+/* Step nav footer */
+.step-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;background:var(--surface)}
+
+/* ── Activity Zone ── */
+#activity-header{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+#activity-feed{flex:1;overflow-y:auto;padding:8px}
+.activity-entry{display:flex;gap:8px;padding:6px 8px;border-radius:var(--radius-sm);margin-bottom:2px;transition:background .1s}
+.activity-entry:hover{background:var(--surface2)}
+.activity-time{font-size:9px;color:var(--text-dim);white-space:nowrap;padding-top:1px;min-width:38px}
+.activity-msg{flex:1;font-size:11px;color:var(--text-muted);line-height:1.4}
+.activity-msg a{color:var(--accent);text-decoration:none}
+.activity-msg a:hover{text-decoration:underline}
+.activity-icon{font-size:12px;flex-shrink:0;width:16px;text-align:center}
+.activity-empty{padding:20px;text-align:center;color:var(--text-dim);font-size:11px}
+
+/* Figma quick panel in activity zone bottom */
+#figma-quick{border-top:1px solid var(--border);padding:10px;flex-shrink:0}
+#figma-quick-link{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--surface2);border-radius:var(--radius-sm);text-decoration:none;color:var(--text-muted);font-size:11px;transition:background .15s}
+#figma-quick-link:hover{background:var(--border);color:var(--text)}
+
+/* ── Shared form controls ── */
+select,input,textarea{width:100%;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font-sans);font-size:12px;outline:none;transition:border-color .15s}
+select:focus,input:focus,textarea:focus{border-color:var(--accent)}
+select option{background:var(--surface2)}
+
+/* Buttons */
+.btn{padding:7px 14px;border-radius:var(--radius-sm);border:none;font-size:12px;font-weight:600;cursor:pointer;transition:opacity .15s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.primary:hover:not(:disabled){opacity:.85}
+.btn.success{background:var(--green);color:#000}
+.btn.success:hover:not(:disabled){opacity:.85}
+.btn.danger{background:var(--red);color:#fff}
+.btn.danger:hover:not(:disabled){opacity:.85}
+.btn.ghost{background:none;border:1px solid var(--border);color:var(--text-muted)}
+.btn.ghost:hover:not(:disabled){border-color:var(--text-muted);color:var(--text)}
+.btn.accent-outline{background:none;border:1px solid var(--accent);color:var(--accent)}
+.btn.accent-outline:hover:not(:disabled){background:var(--accent-dim)}
+
+/* ── Figma Modal ── */
+#figma-modal{display:none;position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);align-items:center;justify-content:center}
+#figma-modal.open{display:flex}
+#figma-modal-content{background:var(--surface);border:1px solid var(--border);border-radius:10px;max-width:900px;width:95%;max-height:85vh;display:flex;flex-direction:column;overflow:hidden}
+#figma-modal-header{padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+#figma-modal-body{flex:1;overflow-y:auto;padding:16px}
+#figma-frames-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.figma-grid-card{background:var(--surface2);border:1px solid var(--border);border-radius:6px;overflow:hidden;cursor:pointer;transition:border-color .15s}
+.figma-grid-card:hover{border-color:var(--accent)}
+.figma-card-thumb{height:100px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:24px;overflow:hidden}
+.figma-card-thumb img{width:100%;height:100%;object-fit:contain}
+.figma-card-name{padding:6px 8px;font-size:10px;color:var(--text-muted);line-height:1.3}
+#figma-img-view{display:none;text-align:center}
+#figma-img-view img{max-width:100%;border-radius:6px;border:1px solid var(--border)}
+
+/* ── New Session Modal ── */
+#new-session-modal{display:none;position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);align-items:center;justify-content:center}
+#new-session-modal.open{display:flex}
+#nsm-content{background:var(--surface);border:1px solid var(--border);border-radius:10px;width:420px;max-width:95%;overflow:hidden}
+#nsm-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+#nsm-header h2{font-size:14px;font-weight:600}
+#nsm-body{padding:16px;display:flex;flex-direction:column;gap:10px}
+#nsm-footer{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+.nsm-field{display:flex;flex-direction:column;gap:4px}
+.nsm-field label{font-size:11px;color:var(--text-muted)}
+
+/* ── Toast ── */
+#toast{position:fixed;bottom:20px;right:20px;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 16px;font-size:12px;color:var(--text);box-shadow:0 4px 20px rgba(0,0,0,.5);transform:translateY(20px);opacity:0;transition:all .25s;pointer-events:none;max-width:280px}
+#toast.show{transform:translateY(0);opacity:1}
+#toast.success{border-color:var(--green)}
+#toast.error{border-color:var(--red)}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--text-dim)}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ══ Zone 1: Sidebar ══ -->
+<div id="sidebar">
+  <div id="sidebar-header">
+    <div id="sidebar-title">KYC QA <span>Agent</span></div>
+    <div class="status-row">
+      <div class="status-item"><div class="dot" id="jira-dot"></div><span id="jira-status-text">Jira…</span></div>
+      <div class="status-item"><div class="dot" id="excel-dot" title="Excel file"></div><span id="excel-status-text">Excel…</span></div>
+      <div class="status-item"><div class="dot" id="google-dot" title="Google Sheets"></div><span id="google-status-text">GSheets…</span></div>
+    </div>
+  </div>
+
+  <div id="sessions-header">
+    <div class="section-label">Sessions</div>
+    <button id="btn-new-session" onclick="openNewSessionModal()">+ New</button>
+  </div>
+
+  <div id="session-list">
+    <div class="sessions-empty" id="sessions-empty">No sessions yet.<br>Click + New to start.</div>
+  </div>
+
+  <div id="sidebar-stats">
+    <div class="section-label">Today</div>
+    <div class="stats-grid">
+      <div class="stat-box"><div class="stat-num" id="stat-sessions">0</div><div class="stat-lbl">Sessions</div></div>
+      <div class="stat-box"><div class="stat-num" id="stat-tcs">0</div><div class="stat-lbl">TCs</div></div>
+      <div class="stat-box"><div class="stat-num" id="stat-bugs">0</div><div class="stat-lbl">Bugs</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Zone 2: Main Workspace ══ -->
+<div id="workspace">
+
+  <!-- Header bar -->
+  <div id="workspace-header">
+    <span id="ws-ticket-label" style="color:var(--text-dim)">No session</span>
+    <span id="ws-summary" style="color:var(--text-dim)">Select or create a session to begin</span>
+    <span id="ws-flow-badge" class="ws-meta-badge" style="display:none"></span>
+    <span id="ws-env-badge" class="ws-meta-badge" style="display:none"></span>
+  </div>
+
+  <!-- Step pipeline -->
+  <div id="pipeline">
+    <div class="pipe-step locked" id="pipe1" onclick="goToStep(1)">
+      <span class="pipe-num">1</span>
+      <span class="pipe-label">Requirement</span>
+    </div>
+    <div class="pipe-connector" id="pipe-conn1"></div>
+    <div class="pipe-step locked" id="pipe2" onclick="goToStep(2)">
+      <span class="pipe-num">2</span>
+      <span class="pipe-label">TC Import</span>
+    </div>
+    <div class="pipe-connector" id="pipe-conn2"></div>
+    <div class="pipe-step locked" id="pipe3" onclick="goToStep(3)">
+      <span class="pipe-num">3</span>
+      <span class="pipe-label">Test Run</span>
+    </div>
+    <div class="pipe-connector" id="pipe-conn3"></div>
+    <div class="pipe-step locked" id="pipe4" onclick="goToStep(4)">
+      <span class="pipe-num">4</span>
+      <span class="pipe-label">Bug Report</span>
+    </div>
+  </div>
+
+  <!-- Step content area -->
+  <div id="step-content">
+    <div id="empty-state">
+      <div class="big-icon">🗂</div>
+      <h2>KYC QA Agent</h2>
+      <p>Create a new session to start the workflow.<br>Fetch a Jira ticket → generate TCs via Claude Code → import → test → report.</p>
+      <button class="btn primary" onclick="openNewSessionModal()" style="margin-top:8px">+ New Session</button>
+    </div>
+  </div>
+
+  <!-- Step nav footer (shown when session active) -->
+  <div id="step-nav" class="step-nav" style="display:none">
+    <button class="btn ghost" id="btn-prev-step" onclick="prevStep()">← Back</button>
+    <span id="step-nav-label" style="font-size:11px;color:var(--text-dim)"></span>
+    <button class="btn primary" id="btn-next-step" onclick="nextStep()">Next →</button>
+  </div>
+</div>
+
+<!-- ══ Zone 3: Activity Feed ══ -->
+<div id="activity-zone">
+  <div id="activity-header">
+    <div class="section-label">Activity</div>
+    <button class="btn ghost" style="padding:3px 8px;font-size:10px" onclick="clearActivityDisplay()">Clear</button>
+  </div>
+  <div id="activity-feed">
+    <div class="activity-empty">Activity will appear here.</div>
+  </div>
+  <div id="figma-quick">
+    <a href="https://www.figma.com/design/JLxd5SCV2LoPVY0DMX4D9f/KYC-QA" target="_blank" id="figma-quick-link">
+      🎨 Open Figma — KYC QA
+    </a>
+  </div>
+</div>
+
+</div><!-- #app -->
+
+<!-- ══ New Session Modal ══ -->
+<div id="new-session-modal">
+  <div id="nsm-content">
+    <div id="nsm-header">
+      <h2>New Session</h2>
+      <button class="btn ghost" style="padding:3px 8px" onclick="closeNewSessionModal()">✕</button>
+    </div>
+    <div id="nsm-body">
+      <div class="nsm-field">
+        <label>Jira Ticket ID *</label>
+        <input type="text" id="nsm-ticket" placeholder="e.g. KC-4877" style="text-transform:uppercase">
+      </div>
+      <div class="nsm-field">
+        <label>Flow</label>
+        <select id="nsm-flow">
+          <option value="TH Onboarding">TH Onboarding</option>
+          <option value="GL Onboarding">GL Onboarding</option>
+          <option value="EDD">EDD</option>
+        </select>
+      </div>
+      <div class="nsm-field">
+        <label>Target Sheet</label>
+        <select id="nsm-sheet"><option value="">Select sheet…</option></select>
+      </div>
+      <div class="nsm-field">
+        <label>Environment</label>
+        <select id="nsm-env">
+          <option value="staging">Staging</option>
+          <option value="preprod">Preprod</option>
+          <option value="prod">Prod</option>
+        </select>
+      </div>
+      <div id="nsm-error" style="color:var(--red);font-size:11px;display:none"></div>
+    </div>
+    <div id="nsm-footer">
+      <button class="btn ghost" onclick="closeNewSessionModal()">Cancel</button>
+      <button class="btn primary" id="btn-create-session" onclick="createSession()">Create Session</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Figma Modal ══ -->
+<div id="figma-modal">
+  <div id="figma-modal-content">
+    <div id="figma-modal-header">
+      <h2 id="figma-modal-title" style="font-size:14px;font-weight:600">Screen Reference</h2>
+      <button class="btn ghost" style="padding:3px 8px" onclick="closeFigmaModal()">✕</button>
+    </div>
+    <div id="figma-modal-body">
+      <div id="figma-frames-grid"></div>
+      <div id="figma-img-view">
+        <button class="btn ghost" style="margin-bottom:12px" onclick="backToFigmaGrid()">← Back</button>
+        <div id="figma-img-loading" style="padding:30px;text-align:center;color:var(--text-muted)">Loading…</div>
+        <img id="figma-img-large" src="" alt="" style="display:none;max-width:100%;border-radius:6px">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Toast ══ -->
+<div id="toast"></div>
+
+<script>
+// ── Screen reference data ──────────────────────────────────────────────────────
+const SCREEN_REF = {
+  "TH Onboarding": [
+    {name:"TH_Login.png",desc:"Login page"},{name:"TH_Page_not_found.png",desc:"404 / Invalid URL"},
+    {name:"TH_Select_nationality.png",desc:"Nationality selection"},{name:"TH_Term_condition.png",desc:"Term condition"},
+    {name:"TH_General_Instruction.png",desc:"General instruction"},{name:"TH_Liveness_Insrtuction.png",desc:"Liveness instruction"},
+    {name:"TH_Sumsub.png",desc:"Sumsub upload"},{name:"TH_Sumsub_ID_card_front.png",desc:"Sumsub – ID card front"},
+    {name:"TH_Sumsub_ID_card_back.png",desc:"Sumsub – ID card back"},{name:"TH_Sumsub_ID_card_preview.png",desc:"Sumsub – ID card preview"},
+    {name:"TH_Sumsub_ID_card_failed.png",desc:"Sumsub – scan failed"},{name:"TH_Sumsub_facial.png",desc:"Sumsub – facial check"},
+    {name:"TH_Sumsub_facial_preview.png",desc:"Sumsub – facial preview"},{name:"TH_Sumsub_agreement.png",desc:"Sumsub – agreement"},
+    {name:"TH_Sumsub_complete.png",desc:"Sumsub – complete"},{name:"TH_General_information_1.png",desc:"General info (1)"},
+    {name:"TH_General_information_2.png",desc:"General info (2)"},{name:"TH_Identity_information_ID_card.png",desc:"Identity – ID card"},
+    {name:"TH_Permanent_address_TH.png",desc:"Permanent address – TH"},{name:"TH_Permanent_address_NON_TH.png",desc:"Permanent address – Non-TH"},
+    {name:"TH_Current_address_TH.png",desc:"Current address – TH"},{name:"TH_Current_address_NON_TH.png",desc:"Current address – Non-TH"},
+    {name:"TH_Occupation_address_TH.png",desc:"Occupation – TH"},{name:"TH_Occupation_address_NON_TH.png",desc:"Occupation – Non-TH"},
+    {name:"TH_Background_information.png",desc:"Background info"},{name:"TH_Disclosure_information.png",desc:"Disclosure info"},
+    {name:"TH_Disclosure_information_popup.png",desc:"Disclosure – popup"},{name:"TH_Financial_information.png",desc:"Financial info"},
+    {name:"TH_Fatca_questionnaire_1-7.png",desc:"FATCA 1–7"},{name:"TH_Additional_information.png",desc:"Additional docs"},
+    {name:"TH_Additional_information_ThaiD.png",desc:"Additional – ThaiD"},{name:"TH_Info_summary_1-4.png",desc:"Info summary"},
+    {name:"TH_Test_instruction.png",desc:"Test instruction"},{name:"TH_Suitability_test_1-10.png",desc:"Suitability 1–10"},
+    {name:"TH_Suitability_test_result.png",desc:"Suitability result"},{name:"TH_Knowledge_test_1-10.png",desc:"Knowledge 1–10"},
+    {name:"TH_2FA.png",desc:"2FA"},{name:"TH_Pending_review.png",desc:"Pending review"},{name:"TH_Approved.png",desc:"Approved"},
+  ],
+  "GL Onboarding": [
+    {name:"GL_Login.png",desc:"Login page"},{name:"GL_Page_not_found.png",desc:"404 / Invalid URL"},
+    {name:"GL_Select_nationality.png",desc:"Nationality selection"},{name:"GL_Term_condition.png",desc:"Term condition"},
+    {name:"GL_General_Instruction.png",desc:"General instruction"},{name:"GL_Liveness_Insrtuction.png",desc:"Liveness instruction"},
+    {name:"GL_Sumsub.png",desc:"Sumsub upload"},{name:"GL_Sumsub_passport.png",desc:"Sumsub – passport"},
+    {name:"GL_Sumsub_passport_preview.png",desc:"Sumsub – passport preview"},{name:"GL_Sumsub_ID_card_front.png",desc:"Sumsub – ID card front"},
+    {name:"GL_Sumsub_ID_card_back.png",desc:"Sumsub – ID card back"},{name:"GL_Sumsub_ID_card_preview.png",desc:"Sumsub – ID card preview"},
+    {name:"GL_Sumsub_ID_card_failed.png",desc:"Sumsub – scan failed"},{name:"GL_Sumsub_facial.png",desc:"Sumsub – facial"},
+    {name:"GL_Sumsub_facial_preview.png",desc:"Sumsub – facial preview"},{name:"GL_Sumsub_agreement.png",desc:"Sumsub – agreement"},
+    {name:"GL_Sumsub_complete.png",desc:"Sumsub – complete"},{name:"GL_General_information_1.png",desc:"General info (1)"},
+    {name:"GL_General_information_2.png",desc:"General info (2)"},{name:"GL_Identity_information_ID_card.png",desc:"Identity – ID card"},
+    {name:"GL_Identity_information_passport.png",desc:"Identity – passport"},{name:"GL_Permanent_address_TH.png",desc:"Permanent address – TH"},
+    {name:"GL_Permanent_address_NON_TH.png",desc:"Permanent address – Non-TH"},{name:"GL_Current_address_TH.png",desc:"Current address – TH"},
+    {name:"GL_Current_address_NON_TH.png",desc:"Current address – Non-TH"},{name:"GL_Occupation_address_TH.png",desc:"Occupation – TH"},
+    {name:"GL_Occupation_address_NON_TH.png",desc:"Occupation – Non-TH"},{name:"GL_Background_information.png",desc:"Background info"},
+    {name:"GL_Disclosure_information.png",desc:"Disclosure (no proof of fund)"},{name:"GL_Financial_information.png",desc:"Financial info"},
+    {name:"GL_Fatca_questionnaire_1-7.png",desc:"FATCA 1–7"},{name:"GL_Info_summary_1-4.png",desc:"Info summary"},
+    {name:"GL_2FA.png",desc:"2FA"},{name:"GL_Pending_review.png",desc:"Pending review"},{name:"GL_Approved.png",desc:"Approved"},
+  ],
+  "EDD": [
+    {name:"EDD_Login.png",desc:"Login page"},{name:"EDD_Page_not_found.png",desc:"404 / Invalid URL"},
+    {name:"EDD_General_instruction.png",desc:"General instruction (EDD)"},{name:"EDD_Resubmit_ID_card_front.png",desc:"Resubmit – ID card front"},
+    {name:"EDD_Resubmit_ID_card_back.png",desc:"Resubmit – ID card back"},{name:"EDD_Resubmit_passport.png",desc:"Resubmit – passport"},
+    {name:"EDD_General_information_1.png",desc:"General info (limited)"},{name:"EDD_General_information_2.png",desc:"General info (2)"},
+    {name:"EDD_Identity_information_ID_card.png",desc:"Identity – ID card"},{name:"EDD_Identity_information_passport.png",desc:"Identity – passport"},
+    {name:"EDD_Permanent_address_TH.png",desc:"Permanent address – TH"},{name:"EDD_Permanent_address_NON_TH.png",desc:"Permanent address – Non-TH"},
+    {name:"EDD_Current_address_TH.png",desc:"Current address – TH"},{name:"EDD_Current_address_NON_TH.png",desc:"Current address – Non-TH"},
+    {name:"EDD_Occupation_address_TH.png",desc:"Occupation – TH"},{name:"EDD_Occupation_address_NON_TH.png",desc:"Occupation – Non-TH"},
+    {name:"EDD_Background_information.png",desc:"Background info"},{name:"EDD_Disclosure_information.png",desc:"Disclosure info"},
+    {name:"EDD_Disclosure_information_popup.png",desc:"Disclosure – popup"},{name:"EDD_Financial_information.png",desc:"Financial info"},
+    {name:"EDD_Additional_information.png",desc:"Additional docs"},{name:"EDD_Additional_information_ThaiD.png",desc:"Additional – ThaiD"},
+    {name:"EDD_Info_summary_1-4.png",desc:"Info summary"},{name:"EDD_Test_instruction.png",desc:"Test instruction (Suitability only)"},
+    {name:"EDD_Suitability_test_1-10.png",desc:"Suitability 1–10"},{name:"EDD_Suitability_test_result.png",desc:"Suitability result"},
+    {name:"EDD_2FA.png",desc:"2FA"},{name:"EDD_Pending_review.png",desc:"Pending review"},{name:"EDD_Approved.png",desc:"Approved"},
+  ]
+};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let sessions = [];
+let activeSession = null;
+let config = {};
+let figmaCache = {};
+let figmaImageCache = {};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
+function fmtTime(iso){
+  if(!iso) return '';
+  try{
+    const d=new Date(iso);
+    return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  }catch{return ''}
+}
+let toastTimer;
+function showToast(msg,type=''){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='show '+(type||'');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.className='',3000);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init(){
+  try{
+    const res=await fetch('/api/config');
+    config=await res.json();
+    // Populate sheet dropdowns
+    const selectors=['nsm-sheet'];
+    selectors.forEach(id=>{
+      const el=document.getElementById(id);
+      if(!el) return;
+      config.sheets.forEach(s=>{ const o=document.createElement('option'); o.value=s; o.textContent=s; el.appendChild(o); });
+    });
+    // Excel status
+    const excelDot=document.getElementById('excel-dot');
+    const excelTxt=document.getElementById('excel-status-text');
+    if(config.excel_exists){
+      excelDot.className='dot ok'; excelTxt.textContent='Excel OK';
+    } else {
+      excelDot.className='dot error'; excelTxt.textContent='Excel missing';
+    }
+
+    // Google Sheets status
+    const googleDot=document.getElementById('google-dot');
+    const googleTxt=document.getElementById('google-status-text');
+    if(config.google_sheets_authenticated){
+      googleDot.className='dot ok'; googleTxt.textContent='GSheets OK';
+    } else if(config.google_sheets_available){
+      googleDot.className='dot warn'; googleTxt.textContent='GSheets auth';
+    } else {
+      googleDot.className='dot error'; googleTxt.textContent='GSheets N/A';
+    }
+  }catch(e){ console.error('Config failed',e) }
+
+  // Jira status
+  initJira();
+  // Load sessions
+  await loadSessions();
+}
+
+async function initJira(){
+  try{
+    const res=await fetch('/api/jira/status');
+    const d=await res.json();
+    const dot=document.getElementById('jira-dot');
+    const txt=document.getElementById('jira-status-text');
+    if(d.configured){
+      dot.className='dot ok'; txt.textContent=`Jira: ${d.project}`;
+    } else {
+      dot.className='dot error'; txt.textContent='Jira: off';
+    }
+  }catch{
+    document.getElementById('jira-dot').className='dot error';
+    document.getElementById('jira-status-text').textContent='Jira: error';
+  }
+}
+
+// ── Sessions ──────────────────────────────────────────────────────────────────
+async function loadSessions(){
+  try{
+    const res=await fetch('/api/sessions');
+    const d=await res.json();
+    sessions=d.sessions||[];
+    renderSessionList();
+    updateStats();
+  }catch(e){ console.error('Load sessions failed',e) }
+}
+
+function renderSessionList(){
+  const list=document.getElementById('session-list');
+  const empty=document.getElementById('sessions-empty');
+  if(!sessions.length){
+    empty.style.display='';
+    list.querySelectorAll('.session-card').forEach(el=>el.remove());
+    return;
+  }
+  empty.style.display='none';
+  // Remove old cards
+  list.querySelectorAll('.session-card').forEach(el=>el.remove());
+  sessions.forEach(s=>{
+    const card=document.createElement('div');
+    card.className='session-card'+(activeSession&&activeSession.id===s.id?' active':'');
+    card.dataset.id=s.id;
+    const stepLabels=['','Requirement','TC Import','Test Run','Bug Report'];
+    const step=s.current_step||1;
+    const tcCount=s.tcs&&s.tcs.length?`${s.tcs.length} TCs`:'No TCs';
+    card.innerHTML=`
+      <button class="sc-delete" onclick="deleteSession(event,'${s.id}')" title="Delete">✕</button>
+      <div class="sc-ticket">${esc(s.ticket_id||'–')}</div>
+      <div class="sc-summary">${esc(s.ticket_summary||s.ticket_data?.summary||'No summary')}</div>
+      <div class="sc-meta">
+        <span class="sc-step-badge">Step ${step}/4: ${stepLabels[step]}</span>
+        <span>${esc(s.flow||'')}</span>
+        <span>${tcCount}</span>
+      </div>`;
+    card.addEventListener('click',(e)=>{ if(e.target.classList.contains('sc-delete')) return; selectSession(s.id); });
+    list.appendChild(card);
+  });
+}
+
+function updateStats(){
+  const today=new Date().toDateString();
+  let sCount=0, tcCount=0, bugCount=0;
+  sessions.forEach(s=>{
+    const d=new Date(s.created_at||'').toDateString();
+    if(d===today) sCount++;
+    tcCount+=(s.tcs||[]).length;
+    bugCount+=(s.bugs_created||[]).length;
+  });
+  document.getElementById('stat-sessions').textContent=sCount;
+  document.getElementById('stat-tcs').textContent=tcCount;
+  document.getElementById('stat-bugs').textContent=bugCount;
+}
+
+async function selectSession(id){
+  const res=await fetch(`/api/sessions/${id}`);
+  if(!res.ok) return;
+  activeSession=await res.json();
+  renderSessionList();
+  renderWorkspace();
+  renderActivityFeed();
+}
+
+async function deleteSession(e,id){
+  e.stopPropagation();
+  if(!confirm('Delete this session?')) return;
+  await fetch(`/api/sessions/${id}`,{method:'DELETE'});
+  if(activeSession&&activeSession.id===id){ activeSession=null; renderEmptyState(); }
+  await loadSessions();
+}
+
+// ── New Session Modal ─────────────────────────────────────────────────────────
+function openNewSessionModal(){
+  document.getElementById('nsm-ticket').value='';
+  document.getElementById('nsm-error').style.display='none';
+  document.getElementById('new-session-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('nsm-ticket').focus(),100);
+}
+function closeNewSessionModal(){ document.getElementById('new-session-modal').classList.remove('open') }
+
+async function createSession(){
+  const ticket=document.getElementById('nsm-ticket').value.trim().toUpperCase();
+  const flow=document.getElementById('nsm-flow').value;
+  const sheet=document.getElementById('nsm-sheet').value;
+  const env=document.getElementById('nsm-env').value;
+  const errEl=document.getElementById('nsm-error');
+  if(!ticket){ errEl.textContent='Ticket ID is required'; errEl.style.display=''; return; }
+  errEl.style.display='none';
+  const btn=document.getElementById('btn-create-session');
+  btn.disabled=true; btn.textContent='Creating…';
+  try{
+    const res=await fetch('/api/sessions',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ticket_id:ticket,flow,sheet,environment:env})
+    });
+    const s=await res.json();
+    closeNewSessionModal();
+    await loadSessions();
+    await selectSession(s.id);
+    showToast(`Session created for ${ticket}`,'success');
+  }catch(e){
+    errEl.textContent=e.message; errEl.style.display='';
+  }finally{
+    btn.disabled=false; btn.textContent='Create Session';
+  }
+}
+
+// ── Save session field ────────────────────────────────────────────────────────
+async function patchSession(fields){
+  if(!activeSession) return;
+  const res=await fetch(`/api/sessions/${activeSession.id}`,{
+    method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(fields)
+  });
+  if(res.ok) activeSession=await res.json();
+}
+
+// ── Workspace render ──────────────────────────────────────────────────────────
+function renderEmptyState(){
+  document.getElementById('step-content').innerHTML=`
+    <div id="empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-dim);text-align:center;gap:12px">
+      <div style="font-size:48px">🗂</div>
+      <h2 style="font-size:18px;color:var(--text-muted);font-weight:500">KYC QA Agent</h2>
+      <p style="font-size:12px;line-height:1.7;max-width:320px">Create a new session to start the workflow.<br>Fetch a Jira ticket → generate TCs via Claude Code → import → test → report.</p>
+      <button class="btn primary" onclick="openNewSessionModal()" style="margin-top:8px">+ New Session</button>
+    </div>`;
+  document.getElementById('step-nav').style.display='none';
+  document.getElementById('ws-ticket-label').textContent='No session';
+  document.getElementById('ws-ticket-label').style.color='var(--text-dim)';
+  document.getElementById('ws-summary').textContent='Select or create a session to begin';
+  document.getElementById('ws-flow-badge').style.display='none';
+  document.getElementById('ws-env-badge').style.display='none';
+  ['pipe1','pipe2','pipe3','pipe4'].forEach(id=>{
+    document.getElementById(id).className='pipe-step locked';
+  });
+}
+
+function renderWorkspace(){
+  if(!activeSession){ renderEmptyState(); return; }
+  const s=activeSession;
+  // Header
+  document.getElementById('ws-ticket-label').textContent=s.ticket_id||'–';
+  document.getElementById('ws-ticket-label').style.color='';
+  document.getElementById('ws-summary').textContent=s.ticket_data?.summary||s.ticket_summary||'No summary';
+  const flowBadge=document.getElementById('ws-flow-badge');
+  flowBadge.textContent=s.flow||''; flowBadge.style.display='';
+  const envBadge=document.getElementById('ws-env-badge');
+  envBadge.textContent=s.environment||'staging'; envBadge.style.display='';
+  // Pipeline
+  const currentStep=s.current_step||1;
+  const stepLabels=['','Requirement','TC Import','Test Run','Bug Report'];
+  for(let i=1;i<=4;i++){
+    const el=document.getElementById(`pipe${i}`);
+    const conn=document.getElementById(`pipe-conn${i}`);
+    if(i<currentStep){ el.className='pipe-step done'; if(conn) conn.className='pipe-connector done'; }
+    else if(i===currentStep){ el.className='pipe-step active'; if(conn) conn.className='pipe-connector'; }
+    else { el.className='pipe-step locked'; if(conn) conn.className='pipe-connector'; }
+  }
+  // Step nav
+  const nav=document.getElementById('step-nav');
+  const prevBtn=document.getElementById('btn-prev-step');
+  const nextBtn=document.getElementById('btn-next-step');
+  const navLabel=document.getElementById('step-nav-label');
+  nav.style.display='flex';
+  prevBtn.style.display=currentStep>1?'':'none';
+  nextBtn.textContent=currentStep<4?'Next →':'Finish';
+  navLabel.textContent=`Step ${currentStep}/4: ${stepLabels[currentStep]}`;
+  // Render step
+  const sc=document.getElementById('step-content');
+  sc.innerHTML='';
+  if(currentStep===1) renderStep1(sc);
+  else if(currentStep===2) renderStep2(sc);
+  else if(currentStep===3) renderStep3(sc);
+  else if(currentStep===4) renderStep4(sc);
+}
+
+// ── Step 1: Requirement ───────────────────────────────────────────────────────
+function renderStep1(container){
+  const s=activeSession;
+  const td=s.ticket_data||{};
+  const hasTicket=!!td.key;
+  container.innerHTML=`
+    <div class="card">
+      <div class="card-title">Jira Ticket</div>
+      <div class="jira-input-row">
+        <input type="text" id="step1-ticket-input" placeholder="e.g. KC-4877" value="${esc(s.ticket_id||'')}" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')fetchStep1Ticket()">
+        <button class="btn primary" onclick="fetchStep1Ticket()">Fetch</button>
+        <button class="btn ghost" onclick="toggleRecentIssues()" title="Recent issues">Recent ▾</button>
+      </div>
+      <div id="recent-issues-dropdown" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);max-height:180px;overflow-y:auto;margin-bottom:8px"></div>
+      <div id="ticket-card-area">${hasTicket?renderTicketCardHTML(td):''}</div>
+    </div>
+    ${hasTicket?`
+    <div class="card">
+      <div class="card-title">Destination & Flow</div>
+
+      <!-- Storage Source Toggle -->
+      <div class="dest-row">
+        <div class="dest-row-label">📁 Storage Source</div>
+        <div class="seg-control">
+          <button class="seg-btn ${(s.excel_source||'excel')==='excel'?'active':''}" onclick="switchExcelSource('excel')">
+            📊 Local Excel
+          </button>
+          <button class="seg-btn ${s.excel_source==='google'?'active-green':''}" onclick="switchExcelSource('google')" ${!config.google_sheets_authenticated?'disabled title="Google Sheets not authenticated"':''}>
+            🟢 Google Sheets ${config.google_sheets_authenticated?'':'(N/A)'}
+          </button>
+        </div>
+      </div>
+
+      <!-- Sheet Mode Toggle -->
+      <div class="dest-row">
+        <div class="dest-row-label">📋 Sheet Target</div>
+        <div class="seg-control">
+          <button class="seg-btn ${!s.new_sheet_mode?'active':''}" onclick="toggleSheetMode('existing')">
+            Select Existing
+          </button>
+          <button class="seg-btn ${s.new_sheet_mode?'active':''}" onclick="toggleSheetMode('new')">
+            + Create New
+          </button>
+        </div>
+      </div>
+
+      <!-- Existing sheet dropdown -->
+      <div id="existing-sheet-mode" style="${s.new_sheet_mode?'display:none':''}">
+        <div style="display:flex;align-items:center;gap:8px">
+          <select id="step1-sheet" style="flex:1" onchange="onSheetChange(this.value)">
+            <option value="">Select sheet…</option>
+            ${(config.sheets||[]).map(sh=>`<option value="${sh}"${s.sheet===sh?' selected':''}>${sh}</option>`).join('')}
+          </select>
+          <span id="sheet-ref-badge" style="font-size:10px;color:var(--green);white-space:nowrap"></span>
+        </div>
+      </div>
+
+      <!-- New sheet inputs -->
+      <div id="new-sheet-mode" style="${s.new_sheet_mode?'':'display:none'}">
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="new-sheet-name" placeholder="Sheet name (e.g. My_Feature_TC)" style="flex:1" value="${esc(s.new_sheet_name||'')}" oninput="updateNewSheetName(this.value)">
+          <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+            <label style="font-size:11px;color:var(--text-muted);white-space:nowrap">Start TC ref:</label>
+            <input type="number" id="new-sheet-start-ref" min="1" value="${s.new_sheet_starting_ref||1}" style="width:56px" oninput="updateNewSheetStartRef(this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Flow selector -->
+      <div class="dest-row" style="margin-top:14px">
+        <div class="dest-row-label">🔄 KYC Flow <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:10px;color:var(--text-dim);margin-left:4px">— used in Claude Code prompt</span></div>
+        <select id="step1-flow" onchange="onFlowChange(this.value)">
+          ${['TH Onboarding','GL Onboarding','EDD'].map(f=>`<option value="${f}"${s.flow===f?' selected':''}>${f}</option>`).join('')}
+        </select>
+        <div class="dest-hint">Claude จะ generate TC ให้ตรง flow ที่เลือก และใส่ platform ให้อัตโนมัติ</div>
+      </div>
+
+      <button id="btn-copy-prompt" onclick="copyPromptForClaudeCode()" style="margin-top:4px">📋 Copy Prompt for Claude Code</button>
+      <div style="font-size:11px;color:var(--text-dim);text-align:center">Paste this prompt in your Claude Code chat to generate TC JSON</div>
+    </div>`:''}`;
+
+  if(hasTicket && s.sheet){
+    loadSheetRef(s.sheet);
+  }
+  if(!hasTicket && s.ticket_id){ fetchStep1Ticket(s.ticket_id); }
+  loadRecentIssues();
+}
+
+function renderTicketCardHTML(td){
+  if(!td||!td.key) return '';
+  const priClass=({High:'high',Medium:'medium',Low:'low'})[td.priority]||'';
+  const typeClass=({Bug:'bug',Story:'story'})[td.issue_type]||'';
+  return `<div class="ticket-card">
+    <div class="tc-key">${esc(td.key)}<a href="${esc(td.url||'')}" target="_blank">↗ Open</a></div>
+    <div class="tc-summary-text">${esc(td.summary||'')}</div>
+    <div class="tc-meta-row">
+      ${td.issue_type?`<span class="meta-badge ${typeClass}">${esc(td.issue_type)}</span>`:''}
+      ${td.priority?`<span class="meta-badge ${priClass}">${esc(td.priority)}</span>`:''}
+      ${td.status?`<span class="meta-badge">${esc(td.status)}</span>`:''}
+    </div>
+    <div class="tc-desc" id="tc-desc-text">${esc(td.description||'(no description)')}</div>
+    ${(td.description||'').length>200?`<button onclick="toggleDesc()" style="background:none;border:none;color:var(--accent);font-size:10px;cursor:pointer;margin-top:4px" id="desc-toggle">Show more</button>`:''}
+  </div>`;
+}
+
+function toggleDesc(){
+  const el=document.getElementById('tc-desc-text');
+  const btn=document.getElementById('desc-toggle');
+  if(el.classList.contains('expanded')){
+    el.classList.remove('expanded'); btn.textContent='Show more';
+  } else {
+    el.classList.add('expanded'); btn.textContent='Show less';
+  }
+}
+
+async function fetchStep1Ticket(preKey){
+  const key=(preKey||document.getElementById('step1-ticket-input')?.value||'').trim().toUpperCase();
+  if(!key){ showToast('Enter a ticket ID','error'); return; }
+  try{
+    const res=await fetch(`/api/jira/issue/${encodeURIComponent(key)}`);
+    if(!res.ok){ const e=await res.json(); showToast(e.detail||'Not found','error'); return; }
+    const data=await res.json();
+    // Update session ticket data
+    await fetch(`/api/sessions/${activeSession.id}`,{
+      method:'PATCH',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({})
+    });
+    // Re-create session with ticket (patch ticket_data via activity)
+    activeSession.ticket_id=data.key;
+    activeSession.ticket_summary=data.summary;
+    activeSession.ticket_data=data;
+    // Persist via POST activity (ticket data stored client-side for now, session already has it from creation)
+    renderWorkspace();
+    renderActivityFeed();
+    showToast(`Loaded ${data.key}`,'success');
+    logActivity(`Fetched ${data.key}: ${data.summary.substring(0,50)}`,'jira',data.url,data.key);
+  }catch(e){ showToast(e.message,'error') }
+}
+
+function onFlowChange(val){
+  patchSession({flow:val}).then(()=>{ activeSession.flow=val; });
+}
+
+async function onSheetChange(val){
+  await patchSession({sheet:val});
+  activeSession.sheet=val;
+  if(val) loadSheetRef(val);
+}
+
+async function loadSheetRef(sheet){
+  const badge=document.getElementById('sheet-ref-badge');
+  if(!badge) return;
+  try{
+    const source = activeSession.excel_source || 'excel';
+    const res=await fetch(`/api/excel/last-tc-ref?sheet=${encodeURIComponent(sheet)}&source=${source}`);
+    const d=await res.json();
+    badge.textContent=`(last ref: ${d.last_tc_ref}, next: ${d.last_tc_ref+1})`;
+  }catch{}
+}
+
+async function switchExcelSource(source){
+  activeSession.excel_source = source;
+  await patchSession({excel_source: source});
+  // Update badge in current step view if visible
+  const srcButtons = document.querySelectorAll('.seg-btn[onclick^="switchExcelSource"]');
+  srcButtons.forEach(btn => {
+    const btnSrc = btn.getAttribute('onclick').includes("'excel'") ? 'excel' : 'google';
+    btn.classList.remove('active','active-green');
+    if(btnSrc === source) btn.classList.add(source === 'google' ? 'active-green' : 'active');
+  });
+  // Re-render step 1 if currently active to refresh sheet-ref-badge and destination display
+  if(activeSession.current_step === 1) renderWorkspace();
+  showToast(`Switched to ${source === 'google' ? 'Google Sheets' : 'Local Excel'}`, 'success');
+  if(activeSession.sheet) loadSheetRef(activeSession.sheet);
+}
+
+function toggleSheetMode(mode){
+  const isNew = mode === 'new';
+  const existingDiv = document.getElementById('existing-sheet-mode');
+  const newDiv = document.getElementById('new-sheet-mode');
+
+  if(existingDiv) existingDiv.style.display = isNew ? 'none' : '';
+  if(newDiv) newDiv.style.display = isNew ? '' : 'none';
+
+  // Update seg-btn active state
+  document.querySelectorAll('.seg-btn').forEach(btn => {
+    if(btn.getAttribute('onclick') === "toggleSheetMode('existing')") btn.classList.toggle('active', !isNew);
+    if(btn.getAttribute('onclick') === "toggleSheetMode('new')") btn.classList.toggle('active', isNew);
+  });
+
+  activeSession.new_sheet_mode = isNew;
+  patchSession({new_sheet_mode: isNew});
+  if(isNew) {
+    activeSession.sheet = null;
+  }
+}
+
+async function updateNewSheetName(val){
+  activeSession.new_sheet_name = val.trim();
+  await patchSession({new_sheet_name: activeSession.new_sheet_name, new_sheet_mode: true});
+}
+
+async function updateNewSheetStartRef(val){
+  activeSession.new_sheet_starting_ref = parseInt(val) || 1;
+  await patchSession({new_sheet_starting_ref: activeSession.new_sheet_starting_ref});
+}
+
+let recentLoaded=false;
+async function loadRecentIssues(){
+  if(recentLoaded) return;
+  try{
+    const res=await fetch('/api/jira/recent?max_results=10');
+    if(!res.ok) return;
+    const d=await res.json();
+    window._recentIssues=d.issues||[];
+    recentLoaded=true;
+  }catch{}
+}
+
+function toggleRecentIssues(){
+  const dd=document.getElementById('recent-issues-dropdown');
+  if(!dd) return;
+  const isOpen=dd.style.display==='block';
+  if(isOpen){ dd.style.display='none'; return; }
+  dd.style.display='block';
+  dd.innerHTML='<div style="padding:8px;color:var(--text-dim);font-size:11px">Loading…</div>';
+  if(!recentLoaded){
+    loadRecentIssues().then(()=>fillRecentDropdown(dd));
+  } else {
+    fillRecentDropdown(dd);
+  }
+}
+
+function fillRecentDropdown(dd){
+  const issues=window._recentIssues||[];
+  if(!issues.length){ dd.innerHTML='<div style="padding:8px;color:var(--text-dim);font-size:11px">No recent issues</div>'; return; }
+  dd.innerHTML=issues.map(i=>`
+    <div onclick="selectRecentIssue('${i.key}')" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <div style="font-size:10px;font-weight:700;color:var(--accent)">${esc(i.key)} <span style="font-size:9px;color:var(--text-dim)">${esc(i.type)}</span></div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:1px">${esc(i.summary)}</div>
+    </div>`).join('');
+}
+
+function selectRecentIssue(key){
+  const input=document.getElementById('step1-ticket-input');
+  if(input) input.value=key;
+  const dd=document.getElementById('recent-issues-dropdown');
+  if(dd) dd.style.display='none';
+  fetchStep1Ticket(key);
+}
+
+async function copyPromptForClaudeCode(){
+  const flow=document.getElementById('step1-flow')?.value||activeSession.flow;
+  const sheet=document.getElementById('step1-sheet')?.value||activeSession.sheet;
+  await patchSession({flow,sheet});
+  activeSession.flow=flow; activeSession.sheet=sheet;
+  try{
+    const res=await fetch(`/api/sessions/${activeSession.id}/prompt`);
+    const d=await res.json();
+    await navigator.clipboard.writeText(d.prompt);
+    const btn=document.getElementById('btn-copy-prompt');
+    btn.textContent='✅ Copied!'; btn.classList.add('copied');
+    setTimeout(()=>{ btn.textContent='📋 Copy Prompt for Claude Code'; btn.classList.remove('copied'); },2000);
+    showToast('Prompt copied to clipboard!','success');
+    logActivity('Prompt copied for Claude Code','info');
+  }catch(e){ showToast('Copy failed: '+e.message,'error') }
+}
+
+// ── Step 2: TC Import ─────────────────────────────────────────────────────────
+function renderStep2(container){
+  const s=activeSession;
+  const tcs=s.tcs||[];
+  const srcLabel = s.excel_source==='google' ? '🟢 Google Sheets' : '📊 Local Excel';
+  const sheetLabel = s.new_sheet_mode
+    ? `+ New: "${esc(s.new_sheet_name||'(unnamed)')}" (start ref: ${s.new_sheet_starting_ref||1})`
+    : (s.sheet || null);
+  const writeLabel = s.excel_source==='google' ? 'Write to Google Sheets' : 'Write to Excel';
+
+  container.innerHTML=`
+    <div class="card">
+      <div class="card-title">Import TC JSON from Claude Code</div>
+      <div class="import-instructions">
+        1. Go to your <b>Claude Code chat</b> and send the copied prompt<br>
+        2. Claude will generate a TC JSON array<br>
+        3. Copy the JSON and paste it below
+      </div>
+      <textarea id="tc-json-input" placeholder='[ { "title": "Verify that...", ... } ]' oninput="validateTCJson(this)"></textarea>
+      <div class="json-status" id="json-status"></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn primary" onclick="importTCJson()">Import TCs</button>
+        <button class="btn ghost" onclick="addTCManually()">+ Add TC Manually</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>TC List <span style="font-weight:400;color:var(--text-dim)">(${tcs.length} total)</span></span>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${tcs.length?`<button class="btn success" onclick="writeToExcel()">${writeLabel} (${tcs.length})</button>`:''}
+          ${s.tcs_written?'<span style="color:var(--green);font-size:11px">✅ Written</span>':''}
+        </div>
+      </div>
+
+      <!-- Destination badge (read-only, links back to Step 1 to change) -->
+      <div class="dest-badge">
+        <div class="dest-badge-icon">${s.excel_source==='google'?'🟢':'📊'}</div>
+        <div class="dest-badge-info">
+          <div class="dest-badge-source">${srcLabel}</div>
+          <div class="dest-badge-sheet ${sheetLabel?'':'dest-badge-none'}">${sheetLabel||'⚠ No sheet selected — go back to Step 1'}</div>
+        </div>
+        <button class="dest-change-btn" onclick="goToStep(1)">← Change</button>
+      </div>
+
+      ${!tcs.length?`<div style="text-align:center;padding:24px;color:var(--text-dim);font-size:12px">No TCs yet. Import JSON or add manually.</div>`:''}
+      <div class="tc-list" id="tc-list-step2">
+        ${tcs.map((tc,i)=>renderTCItemHTML(tc,i,s.test_results||[])).join('')}
+      </div>
+    </div>`;
+}
+
+function validateTCJson(el){
+  const val=el.value.trim();
+  const status=document.getElementById('json-status');
+  if(!val){ el.className='';status.textContent='';status.className='json-status';return; }
+  try{
+    const parsed=JSON.parse(val);
+    if(!Array.isArray(parsed)){throw new Error('Must be a JSON array')}
+    el.className='valid';
+    status.textContent=`✅ Valid JSON — ${parsed.length} TC${parsed.length!==1?'s':''}`;
+    status.className='json-status ok';
+  }catch(e){
+    el.className='invalid';
+    status.textContent=`❌ ${e.message}`;
+    status.className='json-status err';
+  }
+}
+
+async function importTCJson(){
+  const val=document.getElementById('tc-json-input')?.value.trim();
+  if(!val){ showToast('Paste TC JSON first','error'); return; }
+  let parsed;
+  try{ parsed=JSON.parse(val); if(!Array.isArray(parsed)) throw new Error('Must be array'); }
+  catch(e){ showToast('Invalid JSON: '+e.message,'error'); return; }
+  const res=await fetch(`/api/sessions/${activeSession.id}/tcs`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({tcs:parsed})
+  });
+  if(res.ok){
+    activeSession=await res.json();
+    renderWorkspace();
+    renderActivityFeed();
+    showToast(`Imported ${parsed.length} TC(s)`,'success');
+    logActivity(`Imported ${parsed.length} TC(s)`,'tc');
+  }
+}
+
+async function addTCManually(){
+  const blank={
+    feature:'KYC webview',function:'On-Boarding',sub_function:'',tc_ref:'',
+    title:'Verify that ',platform:'TH',preconditions:'',test_data:'',
+    steps:'1. ',expected_results:'1. ',test_path:'Positive',priority:'Medium',
+    complexity:'Medium',regression:'Yes',to_be_automate:'No',
+    test_design_status:'Ready To Review',reviewer:'',remark:'',jira_description:''
+  };
+  // Save to backend FIRST so delete/duplicate/save all work correctly
+  const res = await fetch(`/api/sessions/${activeSession.id}/tcs/add`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({tc: blank})
+  });
+  if(!res.ok){ showToast('Failed to add TC','error'); return; }
+  activeSession = await res.json();
+
+  // Re-render the list to include the new TC
+  renderWorkspace();
+
+  // Open edit mode for the new (last) TC after DOM update
+  const idx = activeSession.tcs.length - 1;
+  requestAnimationFrame(() => {
+    const item = document.getElementById(`tc-item-${idx}`);
+    if(item){
+      item.classList.add('editing');
+      item.scrollIntoView({behavior:'smooth', block:'nearest'});
+    }
+  });
+}
+
+function renderTCItemHTML(tc,i,testResults){
+  const path=(tc.test_path||'').toLowerCase();
+  const pathClass=path==='positive'?'positive':'negative';
+  const pri=(tc.priority||'').toLowerCase();
+  const plat=(tc.platform||'').toUpperCase();
+  const platClass=plat==='TH'?'th':plat==='GL'?'gl':'glth';
+  const result=testResults.find(r=>r.tc_index===i);
+  const resultBadge=result?`<span class="badge ${result.result}">${result.result.toUpperCase()}</span>`:'';
+  return `<div class="tc-item" id="tc-item-${i}">
+    <div class="tc-item-header" onclick="toggleTCItem(${i})">
+      <span class="tc-num">#${tc.tc_ref||i+1}</span>
+      <span class="tc-title-text">${esc(tc.title||'Untitled')}</span>
+      <div class="tc-badges">
+        ${resultBadge}
+        <span class="badge ${platClass}">${plat||'?'}</span>
+        <span class="badge ${pathClass}">${tc.test_path||'?'}</span>
+        <span class="badge ${pri}">${tc.priority||'?'}</span>
+      </div>
+      <div class="tc-actions">
+        <button class="tc-action-btn" onclick="editTCItem(event,${i})" title="Edit">✏️</button>
+        <button class="tc-action-btn" onclick="duplicateTCItem(event,${i})" title="Duplicate">📋</button>
+        <button class="tc-action-btn danger" onclick="deleteTCItem(event,${i})" title="Delete">🗑</button>
+      </div>
+    </div>
+    <div class="tc-body">
+      <div class="tc-grid">
+        <div class="tc-field full"><div class="tc-field-label">Preconditions</div><div class="tc-field-value">${esc(tc.preconditions||'—')}</div></div>
+        <div class="tc-field"><div class="tc-field-label">Steps</div><div class="tc-field-value">${esc(tc.steps||'—')}</div></div>
+        <div class="tc-field"><div class="tc-field-label">Expected Results</div><div class="tc-field-value">${esc(tc.expected_results||'—')}</div></div>
+        <div class="tc-field full"><div class="tc-field-label">Test Data</div><div class="tc-field-value">${esc(tc.test_data||'—')}</div></div>
+        <div class="tc-field"><div class="tc-field-label">Function</div><div class="tc-field-value">${esc(tc.function||'—')}</div></div>
+        <div class="tc-field"><div class="tc-field-label">Sub Function</div><div class="tc-field-value">${esc(tc.sub_function||'—')}</div></div>
+        <div class="tc-field"><div class="tc-field-label">Complexity</div><div class="tc-field-value">${esc(tc.complexity||'—')}</div></div>
+        <div class="tc-field"><div class="tc-field-label">Automate</div><div class="tc-field-value">${esc(tc.to_be_automate||'—')}</div></div>
+        <div class="tc-field"><div class="tc-field-label">Regression</div><div class="tc-field-value">${esc(tc.regression||'—')}</div></div>
+        <div class="tc-field"><div class="tc-field-label">Status</div><div class="tc-field-value">${esc(tc.test_design_status||'—')}</div></div>
+      </div>
+    </div>
+    ${renderEditFormHTML(tc,i)}
+  </div>`;
+}
+
+function renderEditFormHTML(tc,i){
+  const opts=(arr,val)=>arr.map(v=>`<option value="${v}"${v===val?' selected':''}>${v}</option>`).join('');
+  return `<div class="edit-form" id="edit-form-${i}">
+    <div class="edit-grid">
+      <div class="edit-field full"><label>Title</label><input type="text" id="ef-title-${i}" value="${esc(tc.title||'')}"></div>
+      <div class="edit-field"><label>Function</label><input type="text" id="ef-function-${i}" value="${esc(tc.function||'')}"></div>
+      <div class="edit-field"><label>Sub Function</label><input type="text" id="ef-sub_function-${i}" value="${esc(tc.sub_function||'')}"></div>
+      <div class="edit-field"><label>Platform</label><select id="ef-platform-${i}">${opts(['TH','GL','GL & TH'],tc.platform)}</select></div>
+      <div class="edit-field"><label>Test Path</label><select id="ef-test_path-${i}">${opts(['Positive','Negative'],tc.test_path)}</select></div>
+      <div class="edit-field"><label>Priority</label><select id="ef-priority-${i}">${opts(['High','Medium','Low'],tc.priority)}</select></div>
+      <div class="edit-field"><label>Complexity</label><select id="ef-complexity-${i}">${opts(['High','Medium','Low'],tc.complexity)}</select></div>
+      <div class="edit-field"><label>Regression</label><select id="ef-regression-${i}">${opts(['Yes','No'],tc.regression)}</select></div>
+      <div class="edit-field"><label>Automate</label><select id="ef-to_be_automate-${i}">${opts(['Yes','No'],tc.to_be_automate)}</select></div>
+      <div class="edit-field full"><label>Preconditions</label><textarea id="ef-preconditions-${i}" rows="2">${esc(tc.preconditions||'')}</textarea></div>
+      <div class="edit-field full"><label>Steps</label><textarea id="ef-steps-${i}" rows="3">${esc(tc.steps||'')}</textarea></div>
+      <div class="edit-field full"><label>Expected Results</label><textarea id="ef-expected_results-${i}" rows="3">${esc(tc.expected_results||'')}</textarea></div>
+      <div class="edit-field full"><label>Test Data</label><textarea id="ef-test_data-${i}" rows="2">${esc(tc.test_data||'')}</textarea></div>
+      <div class="edit-field full"><label>Remark</label><input type="text" id="ef-remark-${i}" value="${esc(tc.remark||'')}"></div>
+    </div>
+    <div class="edit-actions">
+      <button class="btn success" onclick="saveTCEdit(${i})">Save</button>
+      <button class="btn ghost" onclick="cancelTCEdit(${i})">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function toggleTCItem(i){
+  const item=document.getElementById(`tc-item-${i}`);
+  if(item&&!item.classList.contains('editing')) item.classList.toggle('expanded');
+}
+
+function editTCItem(e,i){
+  e.stopPropagation();
+  const item=document.getElementById(`tc-item-${i}`);
+  if(!item) return;
+  item.classList.remove('expanded');
+  item.classList.add('editing');
+}
+
+function cancelTCEdit(i){
+  const item=document.getElementById(`tc-item-${i}`);
+  if(item){ item.classList.remove('editing','expanded'); }
+}
+
+async function saveTCEdit(i){
+  const fields=['title','function','sub_function','platform','test_path','priority','complexity','regression','to_be_automate','preconditions','steps','expected_results','test_data','remark'];
+  const tcData={...activeSession.tcs[i]};
+  fields.forEach(f=>{
+    const el=document.getElementById(`ef-${f}-${i}`);
+    if(el) tcData[f]=el.value;
+  });
+  // Auto-build jira_description
+  tcData.jira_description=`Pre-condition :\n${tcData.preconditions}\n\nTest Data :\n${tcData.test_data}\n\nTest Step :\n${tcData.steps}\n\nExpected result :\n${tcData.expected_results}`;
+  const res=await fetch(`/api/sessions/${activeSession.id}/tcs/${i}`,{
+    method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({tc_data:tcData})
+  });
+  if(res.ok){
+    activeSession=await res.json();
+    renderWorkspace();
+    renderActivityFeed();
+    showToast('TC saved','success');
+  }
+}
+
+async function deleteTCItem(e,i){
+  e.stopPropagation();
+  if(!confirm('Delete this TC?')) return;
+  const res=await fetch(`/api/sessions/${activeSession.id}/tcs/${i}`,{method:'DELETE'});
+  if(res.ok){
+    activeSession=await res.json();
+    renderWorkspace();
+    renderActivityFeed();
+    showToast('TC deleted');
+  }
+}
+
+async function duplicateTCItem(e,i){
+  e.stopPropagation();
+  const tc={...activeSession.tcs[i]};
+  const res=await fetch(`/api/sessions/${activeSession.id}/tcs/add`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({tc})
+  });
+  if(res.ok){
+    activeSession=await res.json();
+    renderWorkspace();
+    showToast('TC duplicated');
+  }
+}
+
+async function writeToExcel(){
+  const isNew = activeSession.new_sheet_mode;
+  const sheet = activeSession.sheet;
+  const newSheetName = activeSession.new_sheet_name;
+
+  if(!isNew && !sheet){
+    showToast('Go back to Step 1 and select a target sheet','error'); return;
+  }
+  if(isNew && !newSheetName){
+    showToast('Go back to Step 1 and enter a new sheet name','error'); return;
+  }
+
+  const res=await fetch(`/api/sessions/${activeSession.id}/write-excel`,{method:'POST'});
+  const d=await res.json();
+  if(res.ok&&d.success){
+    activeSession.tcs_written=true;
+    const source = activeSession.excel_source || 'excel';
+    const sourceText = source === 'google' ? 'Google Sheets' : 'Excel';
+    const destSheet = d.sheet || sheet || newSheetName;
+    showToast(`${d.rows_added} TC(s) written to ${sourceText} → ${destSheet}!`,'success');
+    logActivity(`${d.rows_added} TC(s) written to ${sourceText} sheet '${destSheet}'`,'excel');
+    renderWorkspace();
+    renderActivityFeed();
+  } else {
+    showToast(d.detail||'Write failed','error');
+    logActivity('Write failed: '+(d.detail||'error'),'error');
+  }
+}
+
+// ── Step 3: Test Run ──────────────────────────────────────────────────────────
+function renderStep3(container){
+  const s=activeSession;
+  const tcs=s.tcs||[];
+  const results=s.test_results||[];
+  const passCount=results.filter(r=>r.result==='pass').length;
+  const failCount=results.filter(r=>r.result==='fail').length;
+  const skipCount=results.filter(r=>r.result==='skip').length;
+  const envUrls=config.env_urls||{};
+  const urlForEnv=(env)=>(envUrls[env]||{})[s.flow]||'';
+
+  container.innerHTML=`
+    <div class="card">
+      <div class="card-title">Environment</div>
+      <div class="env-row">
+        ${['staging','preprod','prod'].map(env=>`
+          <label class="radio-opt${s.environment===env?' selected':''}" onclick="selectEnv('${env}')">
+            <input type="radio" name="env" value="${env}"${s.environment===env?' checked':''} style="width:auto"> ${env.charAt(0).toUpperCase()+env.slice(1)}
+          </label>`).join('')}
+      </div>
+      <div class="env-url-display" id="env-url-display">${urlForEnv(s.environment)||'Select environment'}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Manual Test Tracking</div>
+      <div class="test-coming-soon">
+        <div class="icon">🧪</div>
+        <h3>Automated test scripts — coming soon</h3>
+        <p>For now, manually mark each TC as Pass / Fail / Skip below.<br>Failed TCs will appear in Step 4 for bug reporting.</p>
+      </div>
+      ${tcs.length?`
+      <div class="test-summary-bar">
+        <span class="test-stat total-stat">${tcs.length} Total</span>
+        <span class="test-stat pass-stat">✅ ${passCount} Pass</span>
+        <span class="test-stat fail-stat">❌ ${failCount} Fail</span>
+        <span class="test-stat skip-stat">⏭ ${skipCount} Skip</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--text-dim)">${results.length}/${tcs.length} tested</span>
+      </div>
+      <div id="test-tc-list">
+        ${tcs.map((tc,i)=>{
+          const r=results.find(x=>x.tc_index===i);
+          return `<div class="tc-test-item">
+            <div class="tc-test-info">
+              <div class="tc-test-title">#${tc.tc_ref||i+1} ${esc(tc.title||'Untitled')}</div>
+              <div class="tc-test-meta">${esc(tc.platform||'')} · ${esc(tc.test_path||'')} · ${esc(tc.priority||'')}</div>
+            </div>
+            <div class="tc-test-actions">
+              <button class="test-btn pass${r&&r.result==='pass'?' active':''}" onclick="markTestResult(${i},'pass')">Pass</button>
+              <button class="test-btn fail${r&&r.result==='fail'?' active':''}" onclick="markTestResult(${i},'fail')">Fail</button>
+              <button class="test-btn skip${r&&r.result==='skip'?' active':''}" onclick="markTestResult(${i},'skip')">Skip</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`:
+      '<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:12px">No TCs in this session. Go to Step 2 to import TCs.</div>'}
+    </div>`;
+}
+
+function selectEnv(env){
+  patchSession({environment:env});
+  activeSession.environment=env;
+  // Update UI
+  document.querySelectorAll('.radio-opt').forEach(el=>{
+    el.classList.toggle('selected',el.querySelector('input').value===env);
+    el.querySelector('input').checked=el.querySelector('input').value===env;
+  });
+  const urlForEnv=(config.env_urls||{})[env]||{};
+  const url=urlForEnv[activeSession.flow]||'';
+  const disp=document.getElementById('env-url-display');
+  if(disp) disp.textContent=url||'–';
+  const envBadge=document.getElementById('ws-env-badge');
+  if(envBadge) envBadge.textContent=env;
+}
+
+async function markTestResult(tcIndex,result){
+  const res=await fetch(`/api/sessions/${activeSession.id}/test-result`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({tc_index:tcIndex,result,notes:''})
+  });
+  if(res.ok){
+    activeSession=await res.json();
+    renderWorkspace();
+    renderActivityFeed();
+  }
+}
+
+// ── Step 4: Bug Report ────────────────────────────────────────────────────────
+function renderStep4(container){
+  const s=activeSession;
+  const tcs=s.tcs||[];
+  const results=s.test_results||[];
+  const bugs=s.bugs_created||[];
+  const failed=results.filter(r=>r.result==='fail');
+  const passCount=results.filter(r=>r.result==='pass').length;
+  const failCount=failed.length;
+
+  container.innerHTML=`
+    <div class="card">
+      <div class="card-title">Test Summary</div>
+      <div class="test-summary-bar">
+        <span class="test-stat total-stat">${tcs.length} Total</span>
+        <span class="test-stat pass-stat">✅ ${passCount} Passed</span>
+        <span class="test-stat fail-stat">❌ ${failCount} Failed</span>
+        <span class="test-stat" style="color:var(--text-dim)">${tcs.length-results.length} Untested</span>
+      </div>
+    </div>
+    ${!failCount?`<div class="card"><div style="text-align:center;padding:24px;color:var(--green)">✅ No failed TCs! Nothing to report.</div></div>`:`
+    <div class="card">
+      <div class="card-title">Failed TCs — Create Bug Reports</div>
+      ${failed.map(r=>{
+        const tc=tcs[r.tc_index]||{};
+        const existingBug=bugs.find(b=>b.tc_index===r.tc_index);
+        return `<div class="bug-tc-card" id="bug-card-${r.tc_index}">
+          <div class="bug-tc-header">
+            <span class="badge fail">FAIL</span>
+            <span class="tc-num">#${tc.tc_ref||r.tc_index+1}</span>
+            <span class="bug-tc-title">${esc(tc.title||'Untitled')}</span>
+          </div>
+          ${existingBug?`<div class="bug-created-badge"><a href="${esc(existingBug.url)}" target="_blank">${esc(existingBug.key)} created ↗</a></div>`:`
+          <div class="bug-fields">
+            <div class="bug-field" style="grid-column:1/-1">
+              <label>Bug Summary</label>
+              <input type="text" id="bug-summary-${r.tc_index}" value="[${esc(tc.platform||'?')}] Bug: ${esc((tc.title||'').substring(0,60))}">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">
+            <div class="bug-field">
+              <label>Actual Result</label>
+              <input type="text" id="bug-actual-${r.tc_index}" placeholder="What actually happened...">
+            </div>
+            <div class="bug-field">
+              <label>Priority</label>
+              <select id="bug-priority-${r.tc_index}">
+                <option value="High"${tc.priority==='High'?' selected':''}>High</option>
+                <option value="Medium"${tc.priority==='Medium'?' selected':''}>Medium</option>
+                <option value="Low"${tc.priority==='Low'?' selected':''}>Low</option>
+              </select>
+            </div>
+          </div>
+          <div class="bug-action-row">
+            <button class="btn danger" onclick="createBug(${r.tc_index})">Create Jira Bug</button>
+            <button class="btn ghost" onclick="skipBug(${r.tc_index})">Skip</button>
+          </div>`}
+        </div>`;
+      }).join('')}
+    </div>`}
+    ${bugs.length?`
+    <div class="card">
+      <div class="card-title">Bugs Created</div>
+      ${bugs.map(b=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+          <span class="bug-created-badge"><a href="${esc(b.url)}" target="_blank">${esc(b.key)} ↗</a></span>
+          <span style="font-size:11px;color:var(--text-muted)">${esc(b.summary)}</span>
+        </div>`).join('')}
+    </div>`:''}`;
+}
+
+async function createBug(tcIndex){
+  const summary=document.getElementById(`bug-summary-${tcIndex}`)?.value||'';
+  const actual=document.getElementById(`bug-actual-${tcIndex}`)?.value||'';
+  const priority=document.getElementById(`bug-priority-${tcIndex}`)?.value||'Medium';
+  if(!summary){ showToast('Summary required','error'); return; }
+  const res=await fetch(`/api/sessions/${activeSession.id}/bugs`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({tc_index:tcIndex,summary,actual,priority})
+  });
+  const d=await res.json();
+  if(res.ok){
+    activeSession=await (await fetch(`/api/sessions/${activeSession.id}`)).json();
+    renderWorkspace();
+    renderActivityFeed();
+    showToast(`Bug ${d.key} created!`,'success');
+  } else {
+    showToast(d.detail||'Failed','error');
+  }
+}
+
+function skipBug(tcIndex){
+  const card=document.getElementById(`bug-card-${tcIndex}`);
+  if(card) card.style.opacity='.4';
+}
+
+// ── Step navigation ───────────────────────────────────────────────────────────
+async function goToStep(n){
+  if(!activeSession) return;
+  if(n>activeSession.current_step+1) return; // can't skip ahead
+  await patchSession({current_step:n});
+  activeSession.current_step=n;
+  renderWorkspace();
+  renderSessionList();
+}
+
+async function prevStep(){
+  if(!activeSession||activeSession.current_step<=1) return;
+  await goToStep(activeSession.current_step-1);
+}
+
+async function nextStep(){
+  if(!activeSession) return;
+  const next=Math.min((activeSession.current_step||1)+1,4);
+  await goToStep(next);
+}
+
+// ── Activity Feed ─────────────────────────────────────────────────────────────
+const TYPE_ICON={info:'ℹ️',jira:'🎫',tc:'📋',excel:'📝',error:'❌',test:'🧪',bug:'🐛',success:'✅'};
+
+function renderActivityFeed(){
+  const feed=document.getElementById('activity-feed');
+  const activity=(activeSession&&activeSession.activity)||[];
+  if(!activity.length){
+    feed.innerHTML='<div class="activity-empty">No activity yet.</div>';
+    return;
+  }
+  feed.innerHTML=activity.map(a=>`
+    <div class="activity-entry">
+      <span class="activity-icon">${TYPE_ICON[a.type]||'•'}</span>
+      <span class="activity-time">${fmtTime(a.time)}</span>
+      <span class="activity-msg">${a.link?`<a href="${esc(a.link)}" target="_blank">${esc(a.link_text||a.link)}</a> — `:''}${esc(a.message)}</span>
+    </div>`).join('');
+}
+
+function clearActivityDisplay(){
+  document.getElementById('activity-feed').innerHTML='<div class="activity-empty">Cleared.</div>';
+}
+
+async function logActivity(message,type,link,linkText){
+  if(!activeSession) return;
+  await fetch(`/api/sessions/${activeSession.id}/activity`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({message,type:type||'info',link:link||'',link_text:linkText||''})
+  });
+  const res=await fetch(`/api/sessions/${activeSession.id}`);
+  if(res.ok){ activeSession=await res.json(); renderActivityFeed(); }
+}
+
+// ── Figma Modal ───────────────────────────────────────────────────────────────
+async function openFigmaModal(){
+  document.getElementById('figma-modal').classList.add('open');
+  const flow=activeSession?.flow||'TH Onboarding';
+  const grid=document.getElementById('figma-frames-grid');
+  const imgView=document.getElementById('figma-img-view');
+  imgView.style.display='none';
+  grid.style.display='';
+  document.getElementById('figma-modal-title').textContent=`Figma — ${flow}`;
+  const frames=SCREEN_REF[flow]||[];
+  grid.innerHTML=frames.map((f,i)=>`
+    <div class="figma-grid-card" onclick="showFigmaScreen('${esc(f.desc)}','${esc(f.name)}')">
+      <div class="figma-card-thumb">🖼</div>
+      <div class="figma-card-name">${esc(f.desc)}<br><span style="color:var(--text-dim);font-size:9px">${esc(f.name)}</span></div>
+    </div>`).join('');
+}
+
+function showFigmaScreen(desc,name){
+  document.getElementById('figma-frames-grid').style.display='none';
+  const iv=document.getElementById('figma-img-view');
+  iv.style.display='block';
+  document.getElementById('figma-modal-title').textContent=desc;
+  document.getElementById('figma-img-loading').innerHTML=`
+    <div style="padding:30px;text-align:center">
+      <div style="font-size:36px;margin-bottom:8px">🎨</div>
+      <div style="font-size:13px;color:var(--text);margin-bottom:4px">${esc(desc)}</div>
+      <div style="font-size:10px;color:var(--text-dim);margin-bottom:14px">${esc(name)}</div>
+      <a href="https://www.figma.com/design/JLxd5SCV2LoPVY0DMX4D9f/KYC-QA" target="_blank"
+         style="background:var(--accent);color:#fff;padding:8px 18px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600">
+        Open in Figma →
+      </a>
+    </div>`;
+  document.getElementById('figma-img-large').style.display='none';
+}
+
+function backToFigmaGrid(){
+  document.getElementById('figma-frames-grid').style.display='';
+  document.getElementById('figma-img-view').style.display='none';
+}
+
+function closeFigmaModal(){ document.getElementById('figma-modal').classList.remove('open') }
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ closeFigmaModal(); closeNewSessionModal(); }
+});
+document.getElementById('figma-modal').addEventListener('click',e=>{ if(e.target===document.getElementById('figma-modal')) closeFigmaModal(); });
+document.getElementById('new-session-modal').addEventListener('click',e=>{ if(e.target===document.getElementById('new-session-modal')) closeNewSessionModal(); });
+document.getElementById('nsm-ticket').addEventListener('keydown',e=>{ if(e.key==='Enter') createSession(); });
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
